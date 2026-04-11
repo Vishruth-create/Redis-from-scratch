@@ -58,14 +58,17 @@ int main(int argc, char **argv) {
   char buffer[1024]{};
   ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
 
-  if(bytes_received>0)
+  while(bytes_received>0)
   {
     buffer[bytes_received] = '\0';
     std::cout << "Receieved " << buffer << '\n';
 
     const char* response = "+PONG\r\n";
     send(client_fd, response, strlen(response), 0);
+    bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
   }
+
+  std::cout << "Client disconnected!!" << '\n';
 
   
   close(client_fd);
