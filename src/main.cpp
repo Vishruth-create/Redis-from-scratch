@@ -10,7 +10,7 @@
 #include <thread>
 
 
-void handle_clients(const int &client_fd)
+void handle_clients(int client_fd)
 {
   char buffer[1024]{};
   ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
