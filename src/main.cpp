@@ -7,6 +7,25 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <thread>
+
+
+void handle_clients(const int &client_fd)
+{
+  char buffer[1024]{};
+  ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+
+  while(bytes_received>0)
+  {
+    buffer[bytes_received] = '\0';
+    std::cout << "Receieved " << buffer << '\n';
+
+    const char* response = "+PONG\r\n";
+    send(client_fd, response, strlen(response), 0);
+    bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+  }
+  close(client_fd);
+}
 
 int main(int argc, char **argv) {
   // Flush after every std::cout / std::cerr
@@ -51,27 +70,14 @@ int main(int argc, char **argv) {
   std::cout << "Logs from your program will appear here!\n";
 
   // Uncomment the code below to pass the first stage
-  // 
+  while(true){
   int client_fd = accept(server_fd, (struct sockaddr *) &client_addr, (socklen_t *) &client_addr_len);
   std::cout << "Client connected\n";
-
-  char buffer[1024]{};
-  ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
-
-  while(bytes_received>0)
-  {
-    buffer[bytes_received] = '\0';
-    std::cout << "Receieved " << buffer << '\n';
-
-    const char* response = "+PONG\r\n";
-    send(client_fd, response, strlen(response), 0);
-    bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+  std::thread(handle_clients, client_fd).detach();
   }
 
   std::cout << "Client disconnected!!" << '\n';
 
-  
-  close(client_fd);
   close(server_fd);
 
   return 0;
