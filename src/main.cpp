@@ -1,28 +1,35 @@
-#include <iostream>
-#include <cstdlib>
-#include <string>
-#include <cstring>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-#include <netdb.h>
-#include <thread>
+#include "libraries.h"
+#include "parser.h"
+
+void handle_request(const std::vector<std::string> &parsed, int client_fd)
+{
+  for(std::string str : parsed) std::cout << str;
+  if (!parsed.empty() && parsed[0] == "ECHO")
+  {
+    std::string response = "$" + std::to_string(parsed[1].size()) + "\r\n" + parsed[1] + "\r\n";
+    std:: cout << "Sending: " << response << std::endl;
+    send(client_fd, response.c_str(), response.size(), 0);
+  }
+  else
+  {
+    const char* response = "+PONG\r\n";
+    std:: cout << "Sending: " << response << std::endl;
+    send(client_fd, response, strlen(response), 0);
+  }
+}
 
 
 void handle_clients(int client_fd)
 {
   char buffer[1024]{};
-  ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
-
-  while(bytes_received>0)
+  while(true)
   {
-    buffer[bytes_received] = '\0';
-    std::cout << "Receieved " << buffer << '\n';
+    ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+    if(bytes_received<=0) break;
+    std::string data = get_full_message(client_fd, buffer, bytes_received);
+    std::cout << "Receieved " << data << '\n';
 
-    const char* response = "+PONG\r\n";
-    send(client_fd, response, strlen(response), 0);
-    bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
+    handle_request(parse(data), client_fd);
   }
   close(client_fd);
 }
