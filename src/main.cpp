@@ -1,14 +1,29 @@
 #include "libraries.h"
 #include "parser.h"
+#include "db.h"
 
 void handle_request(const std::vector<std::string> &parsed, int client_fd)
 {
   for(std::string str : parsed) std::cout << str;
+
   if (!parsed.empty() && parsed[0] == "ECHO")
   {
+    std::cout << "Got ECHO" << std::endl;
     std::string response = "$" + std::to_string(parsed[1].size()) + "\r\n" + parsed[1] + "\r\n";
     std:: cout << "Sending: " << response << std::endl;
     send(client_fd, response.c_str(), response.size(), 0);
+  }
+
+  else if(parsed[0] == "SET" && parsed.size()==3)
+  {
+    std::cout << "Got SET" << std::endl;
+    set(client_fd, parsed);
+  }
+
+  else if(parsed[0] == "GET" && parsed.size() == 2)
+  {
+    std::cout << "Got GET" << std::endl;
+    get(client_fd, parsed);
   }
   else
   {
