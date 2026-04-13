@@ -1,4 +1,5 @@
 #include "libraries.h"
+#include "utilities.h"
 #include "parser.h"
 #include "db.h"
 
@@ -6,7 +7,7 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
 {
   for(std::string str : parsed) std::cout << str;
 
-  if (!parsed.empty() && parsed[0] == "ECHO")
+  if (!parsed.empty() && to_upper(parsed[0]) == "ECHO")
   {
     std::cout << "Got ECHO" << std::endl;
     std::string response = "$" + std::to_string(parsed[1].size()) + "\r\n" + parsed[1] + "\r\n";
@@ -14,17 +15,18 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     send(client_fd, response.c_str(), response.size(), 0);
   }
 
-  else if(parsed[0] == "SET" && parsed.size()==3)
+  else if(to_upper(parsed[0]) == "SET" && parsed.size()>=3)
   {
     std::cout << "Got SET" << std::endl;
     set(client_fd, parsed);
   }
 
-  else if(parsed[0] == "GET" && parsed.size() == 2)
+  else if(to_upper(parsed[0]) == "GET" && parsed.size() == 2)
   {
     std::cout << "Got GET" << std::endl;
     get(client_fd, parsed);
   }
+
   else
   {
     const char* response = "+PONG\r\n";
@@ -40,7 +42,8 @@ void handle_clients(int client_fd)
   while(true)
   {
     ssize_t bytes_received = recv(client_fd, buffer, sizeof(buffer)-1, 0);
-    if(bytes_received<=0) break;
+    if(bytes_received==0){std::cout << "Client Disconected" << std::endl; break;}
+    else if(bytes_received<0){std::cout << "ERROR!! <0 Bytes Received" << std::endl; break;}
     std::string data = get_full_message(client_fd, buffer, bytes_received);
     std::cout << "Receieved " << data << '\n';
 
