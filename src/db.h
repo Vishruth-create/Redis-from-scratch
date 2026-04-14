@@ -93,7 +93,11 @@ void lrange(const int &client_fd, const std::vector<std::string> &parsed)
     {
         int starting = std::stoi(parsed[2]);
         int end = std::stoi(parsed[3]);
-        if(starting >= mp[parsed[1]].dq.size())
+        
+        if(starting < 0) starting += mp[parsed[1]].dq.size();
+        if(end < 0) end += mp[parsed[1]].dq.size();
+        if(starting<0) starting = 0;
+        if(starting >= mp[parsed[1]].dq.size() || end<starting)
         {
             std::cout << "Inavalid Indices!!" << std::endl;
             std::string response = "*0\r\n";
