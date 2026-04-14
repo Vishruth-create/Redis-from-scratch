@@ -7,7 +7,7 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
 {
   for(std::string str : parsed) std::cout << str;
 
-  if (!parsed.empty() && to_upper(parsed[0]) == "ECHO")
+  if (parsed.size()==2 && to_upper(parsed[0]) == "ECHO")
   {
     std::cout << "Got ECHO" << std::endl;
     std::string response = "$" + std::to_string(parsed[1].size()) + "\r\n" + parsed[1] + "\r\n";
@@ -33,11 +33,23 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     rpush(client_fd, parsed);
   }
 
-  else
+  else if(to_upper(parsed[0]) == "LRANGE" && parsed.size()==4)
+  {
+    std::cout << "Got LRANGE" << std::endl;
+    lrange(client_fd, parsed);
+  }
+
+  else if(to_upper(parsed[0]) == "PING" && parsed.size()==1)
   {
     const char* response = "+PONG\r\n";
     std:: cout << "Sending: " << response << std::endl;
     send(client_fd, response, strlen(response), 0);
+  }
+
+  else
+  {
+    std::string response = "-ERR something went wrong\r\n";
+    send(client_fd, response.c_str(), response.size(), 0);
   }
 }
 

@@ -83,5 +83,36 @@ void rpush(const int &client_fd, const std::vector<std::string> &parsed)
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
-    return;
+    std::string response = "-ERR something went wrong\r\n";
+    send(client_fd, response.c_str(), response.size(), 0);
+}
+
+void lrange(const int &client_fd, const std::vector<std::string> &parsed)
+{
+    if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+    {
+        int starting = std::stoi(parsed[2]);
+        int end = std::stoi(parsed[3]);
+        if(starting >= mp[parsed[1]].dq.size())
+        {
+            std::cout << "Inavalid Indices!!" << std::endl;
+            std::string response = "*0\r\n";
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
+        if (end >= mp[parsed[1]].dq.size()) end = mp[parsed[1]].dq.size()-1;
+        int elements = end-starting+1;
+        std::string response = "*" + std::to_string(elements) + "\r\n";
+        for(int e = 0; e < elements; e++)
+        {
+            response+=("$" + std::to_string(mp[parsed[1]].dq[starting+e].length()));
+            response+="\r\n";
+            response+=mp[parsed[1]].dq[starting+e];
+            response+="\r\n";
+        }
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    std::string response = "*0\r\n";
+    send(client_fd, response.c_str(), response.size(), 0);
 }
