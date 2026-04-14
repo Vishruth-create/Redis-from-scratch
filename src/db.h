@@ -1,14 +1,23 @@
 #include <unordered_map>
+#include <deque>
 #include <chrono>
 
-std::unordered_map<std::string, std::string> mp{};
+struct Value
+{
+    bool type{}; //type true for string false for list
+    std::string value{};
+    std::deque<std::string> dq{};
+};
+
+std::unordered_map<std::string, Value> mp{};
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> expiry{};
 
 //parsed[1] is key and parsed[2] is value
 
 void set(const int &client_fd, const std::vector<std::string> &parsed)
 {
-    mp[parsed[1]] = parsed[2];
+    mp[parsed[1]].value = parsed[2];
+    mp[parsed[1]].type = true;
 
     if(parsed.size()>=5 && to_upper(parsed[3])=="EX")
     {
@@ -33,7 +42,7 @@ void get(const int &client_fd, const std::vector<std::string> &parsed)
         mp.erase(parsed[1]);
     }
 
-    if (mp.find(parsed[1]) == mp.end())
+    if (mp.find(parsed[1]) == mp.end() || mp[parsed[1]].type==false)
     {
         std::string response = "$-1\r\n";
         std::cout << "Key not found!!" << std::endl;
@@ -41,8 +50,38 @@ void get(const int &client_fd, const std::vector<std::string> &parsed)
         return;
     }
 
-    std::cout << "Found : " << mp[parsed[1]] << std::endl;
-    std::string response = "$" + std::to_string(mp[parsed[1]].size()) + "\r\n" + mp[parsed[1]] + "\r\n";
+    std::cout << "Found : " << mp[parsed[1]].value << std::endl;
+    std::string response = "$" + std::to_string(mp[parsed[1]].value.size()) + "\r\n" + mp[parsed[1]].value + "\r\n";
     send(client_fd, response.c_str(), response.size(), 0);
+    return;
+}
+
+void rpush(const int &client_fd, const std::vector<std::string> &parsed)
+{
+    if(mp.find(parsed[1]) == mp.end())
+    {
+        mp[parsed[1]].type = false;
+        size_t elements = parsed.size();
+        for(size_t e = 2; e < elements; e++)
+        {
+            mp[parsed[1]].dq.push_back(parsed[e]);
+            std::cout << "Stored : " << parsed[e] << std::endl;
+        }
+        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    else if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+    {
+        size_t elements = parsed.size();
+        for(size_t e = 2; e < elements; e++)
+        {
+            mp[parsed[1]].dq.push_back(parsed[e]);
+            std::cout << "Stored : " << parsed[e] << std::endl;
+        }
+        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
     return;
 }

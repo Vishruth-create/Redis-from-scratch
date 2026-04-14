@@ -27,6 +27,12 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     get(client_fd, parsed);
   }
 
+  else if(to_upper(parsed[0]) == "RPUSH" && parsed.size()>=3)
+  {
+    std::cout << "Got RPUSH" << std::endl;
+    rpush(client_fd, parsed);
+  }
+
   else
   {
     const char* response = "+PONG\r\n";
