@@ -87,6 +87,37 @@ void rpush(const int &client_fd, const std::vector<std::string> &parsed)
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
+void lpush(const int &client_fd, const std::vector<std::string> &parsed)
+{
+    if(mp.find(parsed[1]) == mp.end())
+    {
+        mp[parsed[1]].type = false;
+        size_t elements = parsed.size();
+        for(size_t e = 2; e < elements; e++)
+        {
+            mp[parsed[1]].dq.push_front(parsed[e]);
+            std::cout << "Stored : " << parsed[e] << std::endl;
+        }
+        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    else if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+    {
+        size_t elements = parsed.size();
+        for(size_t e = 2; e < elements; e++)
+        {
+            mp[parsed[1]].dq.push_front(parsed[e]);
+            std::cout << "Stored : " << parsed[e] << std::endl;
+        }
+        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    std::string response = "-ERR something went wrong\r\n";
+    send(client_fd, response.c_str(), response.size(), 0);
+}
+
 void lrange(const int &client_fd, const std::vector<std::string> &parsed)
 {
     if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)

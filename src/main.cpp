@@ -46,6 +46,12 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     send(client_fd, response, strlen(response), 0);
   }
 
+  else if(to_upper(parsed[0]) == "LPUSH" && parsed.size()>=3)
+  {
+    std::cout << "Got LPUSH" << std::endl;
+    lpush(client_fd, parsed);
+  }
+
   else
   {
     std::string response = "-ERR something went wrong\r\n";
