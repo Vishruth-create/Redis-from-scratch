@@ -151,3 +151,15 @@ void lrange(const int &client_fd, const std::vector<std::string> &parsed)
     std::string response = "*0\r\n";
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
+void llen(const int& client_fd, const std::vector<std::string> &parsed)
+{
+    std::string response = ":";
+    if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+    {
+        response+=std::to_string(mp[parsed[1]].dq.size());
+        response+="\r\n";
+    }
+    else response = ":0\r\n";
+    send(client_fd, response.c_str(), response.size(), 0);
+}

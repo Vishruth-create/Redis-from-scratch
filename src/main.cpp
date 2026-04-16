@@ -52,6 +52,12 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     lpush(client_fd, parsed);
   }
 
+  else if(to_upper(parsed[0])== "LLEN" && parsed.size()==2)
+  {
+    std::cout << "Got LLEN" << std::endl;
+    llen(client_fd, parsed);
+  }
+
   else
   {
     std::string response = "-ERR something went wrong\r\n";
