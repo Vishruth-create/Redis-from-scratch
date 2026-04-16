@@ -163,3 +163,18 @@ void llen(const int& client_fd, const std::vector<std::string> &parsed)
     else response = ":0\r\n";
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
+void lpop(const int& client_fd, const std::vector<std::string> &parsed)
+{
+    std::string response{};
+    if(mp.find(parsed[1]) == mp.end() || (mp[parsed[1]].type == true || mp[parsed[1]].dq.empty()==true))
+    {
+        response = "$-1\r\n";
+    }
+    else
+    {
+        response = "$" + std::to_string(mp[parsed[1]].dq[0].length()) + "\r\n" + mp[parsed[1]].dq[0] + "\r\n";
+        mp[parsed[1]].dq.pop_front();
+    }
+    send(client_fd, response.c_str(), response.size(), 0);
+}

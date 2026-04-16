@@ -58,6 +58,12 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     llen(client_fd, parsed);
   }
 
+  else if(to_upper(parsed[0]) == "LPOP" && parsed.size()==2)
+  {
+    std::cout << "Got LLPOP" << std::endl;
+    lpop(client_fd, parsed);
+  }
+
   else
   {
     std::string response = "-ERR something went wrong\r\n";
