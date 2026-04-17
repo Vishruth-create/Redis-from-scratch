@@ -64,6 +64,11 @@ void handle_request(const std::vector<std::string> &parsed, int client_fd)
     lpop(client_fd, parsed);
   }
 
+  else if(to_upper(parsed[0]) == "LPOP" && parsed.size() == 3)
+  {
+    lpop_(client_fd, parsed);
+  }
+
   else
   {
     std::string response = "-ERR something went wrong\r\n";

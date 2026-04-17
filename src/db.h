@@ -178,3 +178,23 @@ void lpop(const int& client_fd, const std::vector<std::string> &parsed)
     }
     send(client_fd, response.c_str(), response.size(), 0);
 }
+
+void lpop_(const int& client_fd, const std::vector<std::string> &parsed)
+{
+    int elements = std::stoi(parsed[2]);
+    std::string response{};
+    if(mp.find(parsed[1]) == mp.end() || (mp[parsed[1]].type == true || mp[parsed[1]].dq.empty()==true))
+    {
+        response = "$-1\r\n";
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
+    }
+    elements = (elements > mp[parsed[1]].dq.size() ? mp[parsed[1]].dq.size() : elements);
+    response = "*" + std::to_string(elements) + "\r\n";
+    for(int e = 0; e < elements; e++)
+    {
+        response+= "$" + std::to_string(mp[parsed[1]].dq[0].length()) + "\r\n" + mp[parsed[1]].dq[0] + "\r\n";
+        mp[parsed[1]].dq.pop_front();
+    }
+    send(client_fd, response.c_str(), response.size(), 0);
+}
