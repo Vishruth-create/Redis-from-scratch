@@ -1,6 +1,10 @@
 #include <unordered_map>
 #include <deque>
 #include <chrono>
+#include <mutex>
+#include <condition_variable>
+
+std::mutex mtx;
 
 struct Value
 {
@@ -9,8 +13,17 @@ struct Value
     std::deque<std::string> dq{};
 };
 
+struct WaitingClient
+{
+    int client_fd{};
+    std::condition_variable cv;
+    bool ready = false;
+    std::string value{};
+};
+
 std::unordered_map<std::string, Value> mp{};
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> expiry{};
+std::unordered_map<std::string, std::deque<WaitingClient*>> waiters{};
 
 //parsed[1] is key and parsed[2] is value
 
@@ -58,63 +71,71 @@ void get(const int &client_fd, const std::vector<std::string> &parsed)
 
 void rpush(const int &client_fd, const std::vector<std::string> &parsed)
 {
-    if(mp.find(parsed[1]) == mp.end())
+    std::unique_lock<std::mutex> lock(mtx);
+    std::string key = parsed[1];
+    if(mp.find(parsed[1]) == mp.end()) mp[parsed[1]].type = false;
+
+    if(mp[key].type == true)
     {
-        mp[parsed[1]].type = false;
-        size_t elements = parsed.size();
-        for(size_t e = 2; e < elements; e++)
-        {
-            mp[parsed[1]].dq.push_back(parsed[e]);
-            std::cout << "Stored : " << parsed[e] << std::endl;
-        }
-        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        std::string response = "-ERR wrong type\r\n";
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
-    else if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+    size_t len = mp[key].dq.size();
+    size_t elements = parsed.size();
+    for(size_t e = 2; e < elements; e++)
     {
-        size_t elements = parsed.size();
-        for(size_t e = 2; e < elements; e++)
+        std::string val = parsed[e];
+        if(waiters[key].empty() == true) {mp[key].dq.push_back(val);}
+        else
         {
-            mp[parsed[1]].dq.push_back(parsed[e]);
-            std::cout << "Stored : " << parsed[e] << std::endl;
+            WaitingClient *wc = waiters[key][0];
+            waiters[key].pop_front();
+            wc->value = val;
+            wc->ready = true;
+            wc->cv.notify_one();
         }
-        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
-        send(client_fd, response.c_str(), response.size(), 0);
-        return;
+        len++;
     }
-    std::string response = "-ERR something went wrong\r\n";
+
+    std::string response = ":" + std::to_string(len) + "\r\n";
+    lock.unlock();
+
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
 void lpush(const int &client_fd, const std::vector<std::string> &parsed)
 {
-    if(mp.find(parsed[1]) == mp.end())
+    std::unique_lock<std::mutex> lock(mtx);
+    std::string key = parsed[1];
+    if(mp.find(parsed[1]) == mp.end()) mp[parsed[1]].type = false;
+
+    if(mp[key].type == true)
     {
-        mp[parsed[1]].type = false;
-        size_t elements = parsed.size();
-        for(size_t e = 2; e < elements; e++)
-        {
-            mp[parsed[1]].dq.push_front(parsed[e]);
-            std::cout << "Stored : " << parsed[e] << std::endl;
-        }
-        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
+        std::string response = "-ERR wrong type\r\n";
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
-    else if(mp.find(parsed[1]) != mp.end() && mp[parsed[1]].type == false)
+
+    size_t elements = parsed.size();
+    for(size_t e = 2; e < elements; e++)
     {
-        size_t elements = parsed.size();
-        for(size_t e = 2; e < elements; e++)
+        std::string val = parsed[e];
+        if(waiters[key].empty() == true) mp[key].dq.push_front(val);
+        else
         {
-            mp[parsed[1]].dq.push_front(parsed[e]);
-            std::cout << "Stored : " << parsed[e] << std::endl;
+            WaitingClient *wc = waiters[key][0];
+            waiters[key].pop_front();
+            wc->value = val;
+            wc->ready = true;
+
+            wc->cv.notify_one();
         }
-        std::string response = ":" + std::to_string(mp[parsed[1]].dq.size()) + "\r\n";
-        send(client_fd, response.c_str(), response.size(), 0);
-        return;
     }
-    std::string response = "-ERR something went wrong\r\n";
+
+    std::string response = ":" + std::to_string(mp[key].dq.size()) + "\r\n";
+    lock.unlock();
+
     send(client_fd, response.c_str(), response.size(), 0);
 }
 
@@ -196,5 +217,35 @@ void lpop_(const int& client_fd, const std::vector<std::string> &parsed)
         response+= "$" + std::to_string(mp[parsed[1]].dq[0].length()) + "\r\n" + mp[parsed[1]].dq[0] + "\r\n";
         mp[parsed[1]].dq.pop_front();
     }
+    send(client_fd, response.c_str(), response.size(), 0);
+}
+
+void blpop(const int&client_fd, const std::vector<std::string> &parsed)
+{
+    std::string key = parsed[1];
+    std::unique_lock<std::mutex> lock(mtx);
+
+    if(mp.find(key) != mp.end() && mp[key].type == false && !mp[key].dq.empty())
+    {
+        std::string val = mp[key].dq[0];
+        mp[key].dq.pop_front();
+        lock.unlock();
+
+        std::string response = "*2\r\n$" + std::to_string(key.size()) + "\r\n" + key + "\r\n" + "$" + std::to_string(val.size()) + "\r\n" + val + "\r\n";
+        send(client_fd, response.c_str(), response.length(), 0);
+        return;
+    }
+
+    WaitingClient wc;
+    wc.client_fd = client_fd;
+
+    waiters[key].push_back(&wc);
+
+    while(wc.ready == false)
+    {
+        wc.cv.wait(lock); //makes the program wait
+    }
+    std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc.value.length()) + "\r\n" + wc.value + "\r\n";
+    lock.unlock();
     send(client_fd, response.c_str(), response.size(), 0);
 }
