@@ -1,5 +1,6 @@
 #include <unordered_map>
 #include <deque>
+#include <list>
 #include <chrono>
 #include <mutex>
 #include <condition_variable>
@@ -23,7 +24,7 @@ struct WaitingClient
 
 std::unordered_map<std::string, Value> mp{};
 std::unordered_map<std::string, std::chrono::steady_clock::time_point> expiry{};
-std::unordered_map<std::string, std::deque<WaitingClient*>> waiters{};
+std::unordered_map<std::string, std::list<std::shared_ptr<WaitingClient>>> waiters{};
 
 //parsed[1] is key and parsed[2] is value
 
@@ -89,7 +90,7 @@ void rpush(const int &client_fd, const std::vector<std::string> &parsed)
         if(waiters[key].empty() == true) {mp[key].dq.push_back(val);}
         else
         {
-            WaitingClient *wc = waiters[key][0];
+            auto wc = waiters[key].front();
             waiters[key].pop_front();
             wc->value = val;
             wc->ready = true;
@@ -116,24 +117,24 @@ void lpush(const int &client_fd, const std::vector<std::string> &parsed)
         send(client_fd, response.c_str(), response.size(), 0);
         return;
     }
-
+    size_t len = mp[key].dq.size();
     size_t elements = parsed.size();
     for(size_t e = 2; e < elements; e++)
     {
         std::string val = parsed[e];
-        if(waiters[key].empty() == true) mp[key].dq.push_front(val);
+        if(waiters[key].empty() == true) {mp[key].dq.push_front(val);}
         else
         {
-            WaitingClient *wc = waiters[key][0];
+            auto wc = waiters[key].front();
             waiters[key].pop_front();
             wc->value = val;
             wc->ready = true;
-
             wc->cv.notify_one();
         }
+        len++;
     }
 
-    std::string response = ":" + std::to_string(mp[key].dq.size()) + "\r\n";
+    std::string response = ":" + std::to_string(len) + "\r\n";
     lock.unlock();
 
     send(client_fd, response.c_str(), response.size(), 0);
@@ -236,16 +237,16 @@ void blpop(const int&client_fd, const std::vector<std::string> &parsed)
         return;
     }
 
-    WaitingClient wc;
-    wc.client_fd = client_fd;
+    auto wc = std::make_shared<WaitingClient>();
+    wc->client_fd = client_fd;
 
-    waiters[key].push_back(&wc);
+    waiters[key].push_back(wc);
 
-    while(wc.ready == false)
+    while(wc->ready == false)
     {
-        wc.cv.wait(lock); //makes the program wait
+        wc->cv.wait(lock); //makes the program wait
     }
-    std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc.value.length()) + "\r\n" + wc.value + "\r\n";
+    std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc->value.length()) + "\r\n" + wc->value + "\r\n";
     lock.unlock();
     send(client_fd, response.c_str(), response.size(), 0);
 }
