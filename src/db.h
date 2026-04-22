@@ -20,6 +20,7 @@ struct WaitingClient
     std::condition_variable cv;
     bool ready = false;
     std::string value{};
+    std::list<std::shared_ptr<WaitingClient>>::iterator self_it{};
 };
 
 std::unordered_map<std::string, Value> mp{};
@@ -239,14 +240,44 @@ void blpop(const int&client_fd, const std::vector<std::string> &parsed)
 
     auto wc = std::make_shared<WaitingClient>();
     wc->client_fd = client_fd;
-
     waiters[key].push_back(wc);
 
-    while(wc->ready == false)
+    double waittime = std::stod(parsed[2]);
+
+    if (waittime == 0)
     {
-        wc->cv.wait(lock); //makes the program wait
+        while (wc->ready == false)
+        {
+            wc->cv.wait(lock); // makes the program wait
+        }
+        std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc->value.length()) + "\r\n" + wc->value + "\r\n";
+        lock.unlock();
+        send(client_fd, response.c_str(), response.size(), 0);
+        return;
     }
-    std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc->value.length()) + "\r\n" + wc->value + "\r\n";
-    lock.unlock();
-    send(client_fd, response.c_str(), response.size(), 0);
+    else if (waittime > 0)
+    {
+        auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds((int)(waittime * 1000));
+        while (!wc->ready)
+        {
+            if (wc->cv.wait_until(lock, deadline) == std::cv_status::timeout)
+            {
+                break;
+            }
+        }
+        if (wc->ready)
+        {
+            std::string response = "*2\r\n$" + std::to_string(key.length()) + "\r\n" + key + "\r\n" + "$" + std::to_string(wc->value.length()) + "\r\n" + wc->value + "\r\n";
+            lock.unlock();
+            send(client_fd, response.c_str(), response.size(), 0);
+            return;
+        }
+        else
+        {
+            std::string response = "*-1\r\n";
+            waiters[key].remove(wc);
+            lock.unlock();
+            send(client_fd, response.c_str(), response.size(), 0);
+        }
+    }
 }
